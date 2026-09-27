@@ -1,0 +1,138 @@
+  server:
+    port: 8081
+  spring:
+    rabbitmq:
+      host: localhost
+      port: 5672
+      username: guest
+      password: guest
+      # 发布确认：broker 明确回 ack 才算消息交出去了，Redis 里的「待投递」标记这时才删
+      publisher-confirm-type: correlated
+      # 消息路由不到任何队列时退回给发送方。不开的话这种消息会被 broker 直接丢掉，
+      # 而发布确认照样返回成功——这是最阴的一种「丢消息」。
+      publisher-returns: true
+      template:
+        mandatory: true
+      listener:
+        simple:
+          acknowledge-mode: manual
+    application:
+      name: hmdp
+    datasource:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://127.0.0.1:3306/hmdp?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=utf8
+      username: root
+      # 密码不写进仓库：从环境变量读，start-all.sh 会从项目根目录的 .env 里加载
+      password: ${MYSQL_PASSWORD:root}
+    # Boot 3 起 redis 配置由 spring.redis.* 迁到 spring.data.redis.*
+    data:
+      redis:
+        host: 127.0.0.1
+        port: 6379
+        lettuce:
+          pool:
+            max-active: 30
+            max-idle: 15
+            min-idle: 5
+            time-between-eviction-runs: 10s
+    jackson:
+      default-property-inclusion: non_null # JSON处理时忽略非空字段
+    # Spring AI：agent 用 ChatClient 做工具调用与流式对话
+    # DeepSeek 提供 OpenAI 兼容接口，base-url 指过去即可，路径为 /v1/chat/completions
+    ai:
+      openai:
+        base-url: ${LLM_BASE_URL:https://api.deepseek.com}
+        # Spring AI 在 api-key 为空时会直接拒绝创建 bean，导致整个应用起不来
+        # （连秒杀/登录这些无关功能一起挂）。所以给个占位值保证能启动，
+        # 是否真的配了 key 由 LlmAvailability 判断。占位值两边必须一致。
+        api-key: ${DEEPSEEK_API_KEY:__llm_not_configured__}
+        chat:
+          options:
+            model: ${LLM_CHAT_MODEL:deepseek-chat}
+      model:
+        # 向量化仍由本地 DJL + bge-m3 负责，关闭 Spring AI 自带的 embedding 自动装配
+        embedding: none
+      # Spring AI 的重试默认值是【10 次】、退避倍率 5（2s→10s→50s→250s…）。
+      # 对交互式对话来说这个默认极其危险：一次上游抖动就能把请求挂住几分钟
+      # （实测踩过：一次调用卡了 181 秒，SSE 早就被客户端放弃了）。
+      # 这里收紧成「最多 2 次尝试、退避有上限」，再失败就交给上层降级。
+      retry:
+        max-attempts: 2
+        backoff:
+          initial-interval: 500ms
+          multiplier: 2
+          max-interval: 3s
+    # Spring AI 走的是 Boot 自动配置的 RestClient，超时只能在这里设。
+    # 该属性默认不限制，模型接口卡住会让线程永久阻塞，必须显式给上。
+    # 60s 对单次调用足够（流式响应按 chunk 重置读超时），且能让抖动快速失败。
+    http:
+      client:
+        connect-timeout: 10s
+        read-timeout: 60s
+  mybatis-plus:
+    type-aliases-package: com.hmdp.entity # 别名扫描包
+  logging:
+    level:
+      com.hmdp: debug
+
+  # ------------------------------------------------------------------
+  # 知识库与 Agent 对话（全 Java 实现，不再依赖 Python 服务）
+  # 大模型 api-key 走环境变量 DEEPSEEK_API_KEY，不写进配置文件
+  # ------------------------------------------------------------------
+  hmdp:
+    agent:
+      enabled: true
+      scan-interval-ms: 15000      # 知识库扫描间隔
+      scan-initial-delay-ms: 20000 # 启动后首次扫描延迟
+      # 接口地址 / api-key / 对话默认模型已归 Spring AI，见上面的 spring.ai.openai.*
+      # 但这个上限必须自己兜：Spring AI 的工具循环没有轮次限制，模型可能一直要求调工具。
+      # 注意是「累计调用次数」，不是轮数（一轮里可以并行发多个工具调用，各自计数）
+      max-tool-calls: 6
+      llm:
+        fast-model: ${LLM_FAST_MODEL:deepseek-chat}
+        timeout-ms: 180000
+
+    # 图片上传目录（nginx 静态根）。图片实际落在它的 imgs/ 下，对外的 URL 前缀也是 /imgs，
+    # 所以上传接口返回的、以及数据库里存的，都是 /imgs/blogs/... 这种公开路径
+    upload:
+      root: "${UPLOAD_ROOT:/home/zyf/springboot/hmdp/nginx-1.18.0 dianping/html/hmdp}"
+
+    # RAG 知识库：向量化 + Milvus + 检索管线，全部在 JVM 内完成
+    rag:
+      enabled: true
+      # bge-m3 ONNX 模型目录（官方导出，图里已含 CLS 池化与归一化）
+      model-dir: ${RAG_MODEL_DIR:/home/zyf/springboot/hmdp/.tools/models/bge-m3-onnx}
+      warmup-on-start: true        # 启动时预热，避免第一个请求卡顿
+      milvus-uri: http://127.0.0.1:19530
+      collection: hmdp_knowledge_v2
+      tenant-id: default
+      dimension: 1024
+      max-tokens: 1024              # 单条文本向量化的 token 上限（800 汉字约 650 token）
+      max-text-characters: 32768
+      # 两级分块：一家店铺一份文档（约 1000~2500 字），父块给模型完整上下文，叶子块做向量检索
+      parent-size: 1200            # 父块：只写 MySQL，自动合并时取回原文
+      parent-overlap: 100
+      leaf-size: 400               # 叶子块：写 Milvus，向量化与检索都在这一层
+      leaf-overlap: 50
+      leaf-level: 2                # 检索只在叶子层做
+      candidate-k: 20              # 召回候选数
+      top-k: 5                     # 最终证据条数
+      # 稠密 + BM25 稀疏混合召回（RRF 融合）；Milvus 不支持稀疏字段时当次自动退化为纯向量
+      hybrid-enabled: true
+      hybrid-rrf-k: 60
+      hybrid-drop-ratio-search: 0.2
+      auto-merge: true             # 父块自动合并
+      auto-merge-threshold: 2
+      evidence-budget: 6000        # 证据文本字符预算
+      use-pipeline: true           # 是否走 LLM 检索管线（分类/子问题/评分/重写）
+      max-rewrites: 1
+      rerank:
+        # 精排在 Grader 之前执行（见 KnowledgeSearchPipeline.rerank），属于「检索」这一步。
+        # 凭据走环境变量，见项目根目录 .env
+        enabled: true
+        binding-host: ${RERANK_BINDING_HOST:}
+        api-key: ${RERANK_API_KEY:}
+        model: ${RERANK_MODEL:}
+        min-score: 0.0
+        timeout-ms: 8000
+

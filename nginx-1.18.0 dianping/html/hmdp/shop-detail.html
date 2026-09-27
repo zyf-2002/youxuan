@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <title>优选生活</title>
+  <!-- 引入样式 -->
+  <link rel="stylesheet" href="./css/element.css">
+
+  <link href="./css/shop-detail.css" rel="stylesheet">
+  <link href="./css/main.css" rel="stylesheet">
+
+  <style type="text/css">
+
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="header">
+    <div class="header-back-btn" @click="goBack"><i class="el-icon-arrow-left"></i></div>
+    <div class="header-title"></div>
+    <div class="header-share">...</div>
+  </div>
+  <div class="top-bar"></div>
+  <div class="shop-info-box">
+    <div class="shop-title">{{shop.name}}</div>
+    <div class="shop-rate">
+      <el-rate
+          disabled :value="shop.score/10"
+          text-color="#F63"
+          show-score
+      ></el-rate>
+    </div>
+    <div class="shop-images">
+      <div v-for="(s,i) in shop.images" :key="i">
+        <img :src="s" alt="">
+      </div>
+    </div>
+    <div class="shop-address">
+      <div><i class="el-icon-map-location"></i></div>
+      <span>{{shop.address}}</span>
+      <div style="width: 10px; flex-grow: 2; text-align: center; color: #e1e2e3">|</div>
+      <div style="margin: 0 5px"><img src="https://p0.meituan.net/travelcube/bf684aa196c870810655e45b1e52ce843484.png@24w_16h_40q" alt=""></div>
+      <div><img src="https://p0.meituan.net/travelcube/9277ace32123e0c9f59dedf4407892221566.png@24w_24h_40q" alt=""></div>
+    </div>
+  </div>
+  <div class="shop-divider"></div>
+  <div class="shop-open-time">
+    <span><i class="el-icon-watch"></i></span>
+    <div>营业时间</div>
+    <div>{{shop.openHours}}</div>
+    <span class="line-right">查看详情 <i class="el-icon-arrow-right"></i></span>
+  </div>
+  <div class="shop-divider"></div>
+  <div class="shop-profile" v-if="shop.description || shop.highlights || shop.tips">
+    <div class="profile-head">
+      <span class="profile-icon">荐</span>
+      <span style="font-weight: bold;">店铺介绍</span>
+    </div>
+    <div class="profile-desc" v-if="shop.description">{{shop.description}}</div>
+    <div class="profile-item" v-if="shop.highlights">
+      <div class="profile-label">特色亮点</div>
+      <div class="profile-text">{{shop.highlights}}</div>
+    </div>
+    <div class="profile-item" v-if="shop.tips">
+      <div class="profile-label">消费建议</div>
+      <div class="profile-text">{{shop.tips}}</div>
+    </div>
+  </div>
+  <div class="shop-divider"></div>
+  <div class="shop-voucher">
+    <div>
+      <span class="voucher-icon">券</span>
+      <span style="font-weight: bold;">优惠券</span>
+    </div>
+    <div class="voucher-box" v-for="v in vouchers" :key="v.id" v-if="!isEnd(v)">
+      <div class="voucher-circle">
+        <div class="voucher-b"></div>
+        <div class="voucher-b"></div>
+        <div class="voucher-b"></div>
+      </div>
+      <div class="voucher-left">
+        <div class="voucher-title">{{v.title}}</div>
+        <div class="voucher-subtitle">{{v.subTitle}}</div>
+        <div class="voucher-price"><div>￥ {{util.formatPrice(v.payValue)}}</div>  <span>{{(v.payValue*10)/v.actualValue}}折</span></div>
+      </div>
+      <div class="voucher-right">
+        <div class="voucher-btn" :class="{'disable-btn': isNotBegin(v) || v.stock < 1}" @click="seckill(v)">立即抢购</div>
+        <div class="seckill-stock">剩余 <span>{{v.stock}}</span> 张</div>
+        <div class="seckill-time">{{formatTime(v)}}</div>
+      </div>
+    </div>
+  </div>
+  <div class="shop-divider"></div>
+  <div class="shop-blogs" v-if="blogs.length">
+    <div class="blogs-head">
+      <span class="blogs-icon">笔</span>
+      <span style="font-weight: bold;">探店笔记</span>
+      <span class="blogs-count">共 {{blogs.length}} 篇</span>
+    </div>
+    <div class="blogs-list">
+      <div class="blog-row" v-for="b in blogs" :key="b.id" @click="toBlogDetail(b)">
+        <div class="blog-thumb">
+          <img :src="firstImage(b.images)" alt="">
+        </div>
+        <div class="blog-main">
+          <div class="blog-title">{{b.title}}</div>
+          <div class="blog-meta">
+            <span class="blog-author">
+              <img :src="b.icon || '/imgs/icons/default-icon.png'" alt="">
+              {{b.name}}
+            </span>
+            <span class="blog-liked">
+              <i class="el-icon-star-on"></i> {{b.liked || 0}}
+            </span>
+          </div>
+        </div>
+        <div class="blog-arrow"><i class="el-icon-arrow-right"></i></div>
+      </div>
+    </div>
+  </div>
+  <div class="shop-divider"></div>
+  <div class="copyright">
+    copyright ©2021 优选生活
+  </div>
+</div>
+<script src="./js/vue.js"></script>
+<script src="./js/axios.min.js"></script>
+<!-- 引入组件库 -->
+<script src="./js/element.js"></script>
+<script src="./js/common.js?v=jwt-optional-auth-20260529"></script>
+<script>
+
+  const app = new Vue({
+    el: "#app",
+    data: {
+      util,
+      shop: {},
+      vouchers: [],
+      blogs: []
+    },
+    created() {
+      // 获取参数
+      let shopId = util.getUrlParam("id");
+      // 查询酒店信息
+      this.queryShopById(shopId);
+      // 查询优惠券信息
+      this.queryVoucher(shopId);
+      // 查询该店的探店笔记
+      this.queryBlogs(shopId);
+    },
+    methods: {
+      goBack() {
+        history.back();
+      },
+      queryShopById(shopId) {
+        axios.get("/shop/" + shopId)
+        .then(({data}) => {
+          data.images = data.images.split(",")
+          this.shop = data
+        })
+        .catch(this.$message.error)
+      },
+      queryVoucher(shopId) {
+        axios.get("/voucher/list/" + shopId)
+        .then(({data}) => {
+          this.vouchers = data;
+        })
+        .catch(this.$message.error)
+      },
+      // 该店的探店笔记，没有就整块不显示
+      queryBlogs(shopId) {
+        axios.get("/blog/of/shop?id=" + shopId)
+        .then(({data}) => {
+          this.blogs = data || [];
+        })
+        .catch(() => {
+          this.blogs = [];
+        })
+      },
+      toBlogDetail(b) {
+        location.href = "/blog-detail.html?id=" + b.id;
+      },
+      // 笔记的 images 是逗号分隔的多张图，列表里只用第一张
+      firstImage(images) {
+        if (!images) return "/imgs/blogs/blog1.jpg";
+        return String(images).split(",")[0];
+      },
+      formatTime(v){
+        let b = new Date(v.beginTime);
+        let e = new Date(v.endTime);
+        return b.getMonth() + 1 + "月" + b.getDate() + "日 "
+          +  b.getHours() + ":" + this.formatMinutes(b.getMinutes())
+          + " ~ "/*  + e.getMonth() + 1 + "月" + e.getDate() + "日 " */
+          +  e.getHours() + ":" + this.formatMinutes(e.getMinutes());
+      },
+      formatMinutes(m){
+        if(m < 10) m = "0" + m
+        return m;
+      },
+      isNotBegin(v){
+        return new Date(v.beginTime).getTime() > new Date().getTime();
+      },
+      isEnd(v){
+        return new Date(v.endTime).getTime() < new Date().getTime();
+      },
+      seckill(v){
+        if(this.isNotBegin(v)){
+          this.$message.error("优惠券抢购尚未开始！")
+          return;
+        }
+        if(this.isEnd(v)){
+          this.$message.error("优惠券抢购已经结束！")
+          return;
+        }
+        if(v.stock < 1){
+          this.$message.error("库存不足，请刷新再试试！")
+          return;
+        }
+        // 抢购需要登录：确认令牌有效再发请求
+        requireLogin().then(() => {
+          let id = v.id;
+          // 秒杀抢购
+          axios.post("/voucher-order/seckill/" + id)
+          .then(({data}) => {
+            // 这一步只代表抢到资格，订单是后台异步落库的，
+            // 所以接着轮询真实结果，别让用户以为点完就完事了
+            this.$message.success("已抢到资格，订单正在创建，订单号：" + data)
+            this.pollOrderStatus(data, 0)
+          })
+          .catch(err => this.$message.error(err))
+        }).catch(() => {
+        })
+      },
+      pollOrderStatus(orderId, times) {
+        if (times >= 20) {
+          this.$message.warning("订单处理超时，请稍后刷新查看")
+          return;
+        }
+        setTimeout(() => {
+          axios.get("/voucher-order/status/" + orderId)
+            .then(({data}) => {
+              if (!data || data.status === "PROCESSING") {
+                this.pollOrderStatus(orderId, times + 1)
+                return;
+              }
+              if (data.status === "SUCCESS") {
+                this.$message.success(data.message || "下单成功")
+                this.queryVoucher(this.shop.id)
+                return;
+              }
+              if (data.status === "FAILED") {
+                this.$message.error(data.message || "下单失败")
+                this.queryVoucher(this.shop.id)
+                return;
+              }
+              this.$message.warning(data.message || "订单状态未知")
+            })
+            .catch(err => {
+              if (times >= 3) {
+                this.$message.error(err || "查询订单状态失败")
+                return;
+              }
+              this.pollOrderStatus(orderId, times + 1)
+            })
+        }, times === 0 ? 800 : 1500)
+      }
+    }
+  })
+</script>
+</body>
+</html>

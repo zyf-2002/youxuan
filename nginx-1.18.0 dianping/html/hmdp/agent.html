@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <title>智能助手 · 优选生活</title>
+  <link rel="stylesheet" href="./css/element.css">
+  <link href="./css/main.css" rel="stylesheet">
+  <style type="text/css">
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #f5f5f5;
+    }
+    #app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .agent-header {
+      height: 50px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+      flex-shrink: 0;
+    }
+    .agent-header .back {
+      font-size: 20px;
+      color: #333;
+      width: 32px;
+    }
+    .agent-header .title {
+      flex: 1;
+      text-align: center;
+      font-size: 17px;
+      font-weight: 600;
+      color: #333;
+    }
+    .agent-header .new-chat {
+      font-size: 20px;
+      color: #ff6633;
+      width: 32px;
+      text-align: right;
+    }
+    .conv-bar {
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .conv-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      padding: 4px 8px 4px 12px;
+      border-radius: 14px;
+      background: #f5f5f5;
+      color: #666;
+      font-size: 13px;
+      cursor: pointer;
+      max-width: 180px;
+    }
+    .conv-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .conv-del {
+      flex: none;
+      font-size: 12px;
+      color: #bbb;
+    }
+    .conv-del:hover {
+      color: #ff6633;
+    }
+    .conv-chip.active {
+      background: #ff6633;
+      color: #fff;
+    }
+    .conv-chip.active .conv-del {
+      color: rgba(255, 255, 255, 0.7);
+    }
+    .conv-chip.active .conv-del:hover {
+      color: #fff;
+    }
+    .chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+    .msg {
+      display: flex;
+      margin-bottom: 14px;
+    }
+    .msg.user {
+      justify-content: flex-end;
+    }
+    .bubble {
+      max-width: 78%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+      /* 换行由 renderContent 转成的 <br> 负责，这里再用 pre-wrap 会变成空两行 */
+      white-space: normal;
+    }
+    /* renderContent 按空行切出来的段落，段间距靠这里给 */
+    .bubble .para {
+      margin: 0 0 10px;
+    }
+    .bubble .para:last-child {
+      margin-bottom: 0;
+    }
+    .msg.user .bubble {
+      background: #ff6633;
+      color: #fff;
+      border-top-right-radius: 2px;
+    }
+    .msg.assistant .bubble {
+      background: #fff;
+      color: #333;
+      border-top-left-radius: 2px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+    }
+    /* 回答末尾的店铺胶囊：点了跳该店详情页 */
+    .shop-refs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed #eee;
+    }
+    .shop-chip {
+      display: inline-block;
+      font-size: 12px;
+      color: #ff6633;
+      background: #fff1eb;
+      border-radius: 12px;
+      padding: 3px 10px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .shop-chip:hover {
+      background: #ff6633;
+      color: #fff;
+    }
+    .empty {
+      text-align: center;
+      color: #999;
+      font-size: 14px;
+      margin-top: 60px;
+      line-height: 1.9;
+    }
+    .chat-input {
+      flex-shrink: 0;
+      background: #fff;
+      border-top: 1px solid #f0f0f0;
+      padding: 8px 12px;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .chat-input textarea {
+      flex: 1;
+      border: none;
+      outline: none;
+      resize: none;
+      font-size: 14px;
+      line-height: 1.5;
+      max-height: 90px;
+      font-family: inherit;
+      background: transparent;
+    }
+    .send-btn {
+      background: #ff6633;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .send-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .tool-status {
+      color: #999;
+      font-size: 13px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tool-status i {
+      color: #ff6633;
+    }
+    .cursor-blink::after {
+      content: '▍';
+      color: #ff6633;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink {
+      50% {
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <!-- 确认登录状态期间盖住页面，避免先闪出空界面再跳登录页 -->
+  <div class="page-loading" v-if="!ready"></div>
+  <div class="agent-header">
+    <div class="back" @click="goBack"><i class="el-icon-arrow-left"></i></div>
+    <div class="title">智能助手</div>
+    <div class="new-chat" @click="newConversation" title="新建对话"><i class="el-icon-plus"></i></div>
+  </div>
+
+  <div class="conv-bar" v-if="conversations.length">
+    <div class="conv-chip"
+         v-for="c in conversations"
+         :key="c.id"
+         :class="{active: c.id === conversationId}"
+         @click="switchConversation(c.id)">
+      <span class="conv-title">{{ c.title }}</span>
+      <i class="el-icon-close conv-del" title="删除会话" @click.stop="deleteConversation(c)"></i>
+    </div>
+  </div>
+
+  <div class="chat-body" ref="body">
+    <div class="empty" v-if="!messages.length">
+      <div>我是优选生活的智能助手</div>
+      <div>可以按体验找店、查店铺详情、看店里的优惠券</div>
+      <div style="margin-top:16px;color:#bbb">例如：</div>
+      <div style="color:#bbb">中山北路那家杭帮菜人均多少？</div>
+      <div style="color:#bbb">帮我找找杭州的火锅店</div>
+      <div style="color:#bbb">哪家 KTV 环境好、适合聚会？</div>
+      <div style="color:#bbb">最近有什么热门的探店笔记？</div>
+    </div>
+
+    <div class="msg" v-for="(m, i) in messages" :key="i" :class="m.role">
+      <div class="bubble" :class="{'cursor-blink': m.streaming && !m.toolStatus}">
+        <div class="tool-status" v-if="m.toolStatus">
+          <i class="el-icon-loading"></i>
+          <span>{{ m.toolStatus }}</span>
+        </div>
+        <div v-html="renderContent(m.content)"></div>
+        <div class="shop-refs" v-if="shopRefs(m).length">
+          <a class="shop-chip" v-for="c in shopRefs(m)" :key="c.shopId" :href="shopUrl(c)">{{ c.title || c.shopId }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-input">
+    <textarea v-model="question"
+              rows="1"
+              placeholder="输入你的问题，回车发送"
+              @keydown.enter.exact.prevent="send"></textarea>
+    <button class="send-btn" :disabled="sending || !question.trim()" @click="send">
+      {{ sending ? '回答中' : '发送' }}
+    </button>
+  </div>
+</div>
+
+<script src="./js/vue.js"></script>
+<script src="./js/axios.min.js"></script>
+<!-- 和别的页面用同一套 Element 的提示/确认框。少了它 this.$message 是 undefined，
+     登录过期时的提示会退化成浏览器原生 alert，观感和其他页面不一致 -->
+<script src="./js/element.js"></script>
+<script src="./js/common.js"></script>
+<script>
+  new Vue({
+    el: "#app",
+    data() {
+      return {
+        conversations: [],
+        conversationId: null,
+        messages: [],
+        question: "",
+        sending: false,
+        ready: false
+      }
+    },
+    created() {
+      // 这个页面不登录就没有内容：先确认登录有效，再拉数据
+      requireLogin().then(() => {
+        this.ready = true;
+        this.loadConversations();
+      }).catch(() => {
+        // 没登录或已过期，requireLogin 已经提示并准备跳登录页
+      });
+    },
+    methods: {
+      goBack() {
+        history.back();
+      },
+      loadConversations() {
+        axios.get("/agent/conversations").then(res => {
+          this.conversations = res.data || [];
+        }).catch(err => {
+          // 令牌在页面里失效了，全局 401 处理会提示并跳登录页
+          console.log(err);
+        });
+      },
+      switchConversation(id) {
+        if (this.sending || id === this.conversationId) {
+          return;
+        }
+        // 和其他页面统一：先确认登录有效，再拉消息
+        requireLogin().then(() => {
+          this.conversationId = id;
+          axios.get("/agent/conversations/" + id + "/messages").then(res => {
+            this.messages = (res.data || []).map(m => ({
+              role: m.role,
+              content: m.content,
+              citations: this.parseCitations(m.citations)
+            }));
+            this.scrollToBottom();
+          }).catch(err => {
+            this.$message.error(err);
+          });
+        }).catch(() => {
+        });
+      },
+      newConversation() {
+        if (this.sending) {
+          return;
+        }
+        // 会话是登录态的东西，没登录/已过期就别让他进到「新对话」再发不出去
+        requireLogin().then(() => {
+          this.conversationId = null;
+          this.messages = [];
+        }).catch(() => {
+        });
+      },
+      deleteConversation(c) {
+        if (this.sending) {
+          return;
+        }
+        const tip = "删除会话「" + c.title + "」？";
+        const remove = () => {
+          requireLogin().then(() => {
+            axios.delete("/agent/conversations/" + c.id).then(() => {
+              // 删掉的正是当前会话，就把聊天区一起清空
+              if (c.id === this.conversationId) {
+                this.conversationId = null;
+                this.messages = [];
+              }
+              this.loadConversations();
+            }).catch(err => {
+              this.$message.error(err || "删除失败");
+            });
+          }).catch(() => {
+          });
+        };
+        // 用浏览器原生 confirm，和改动之前保持一致（这里刻意不用 Element 的 $confirm）
+        if (confirm(tip)) {
+          remove();
+        }
+      },
+      parseCitations(raw) {
+        if (!raw) {
+          return [];
+        }
+        try {
+          return JSON.parse(raw);
+        } catch (e) {
+          return [];
+        }
+      },
+      scrollToBottom() {
+        this.$nextTick(() => {
+          const body = this.$refs.body;
+          if (body) {
+            body.scrollTop = body.scrollHeight;
+          }
+        });
+      },
+      // 正文用 v-html 渲染，所以先转义再插入自己的标签，避免模型输出里的尖括号被执行
+      renderContent(text) {
+        const escaped = this.escapeHtml(text);
+        // 模型习惯用 **加粗**，这里渲染成真的加粗。
+        // 分段交给「空行」：每个段落包一层 .para，段间距由 CSS 给，
+        // 比连续 <br> 清楚，也不会因为行高看起来仍像一大坨。
+        return escaped
+          .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+          // 万一模型还是标了 [1] 这类编号，直接抹掉
+          .replace(/\s*\[\d{1,2}\]/g, "")
+          .split(/\n{2,}/)
+          .map(p => '<div class="para">' + p.replace(/\n/g, "<br>") + "</div>")
+          .join("");
+      },
+      escapeHtml(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      },
+      isShop(citation) {
+        const id = Number(citation && citation.shopId);
+        return Number.isInteger(id) && id > 0;
+      },
+      shopUrl(citation) {
+        return this.isShop(citation) ? "/shop-detail.html?id=" + Number(citation.shopId) : "";
+      },
+      // 回答末尾列出的店铺；历史消息里可能还留着早期的博客引用，这里只要店铺
+      shopRefs(message) {
+        return (message.citations || []).filter(c => this.isShop(c));
+      },
+      send() {
+        const text = (this.question || "").trim();
+        if (!text || this.sending) {
+          return;
+        }
+        // 发消息要登录：先确认令牌有效，别等消息都推出去了再被 401 打回来
+        requireLogin().then(() => {
+          this.doSend(text);
+        }).catch(() => {
+        });
+      },
+      doSend(text) {
+        this.question = "";
+        this.messages.push({role: "user", content: text, citations: []});
+        const reply = {role: "assistant", content: "", citations: [], streaming: true, toolStatus: null};
+        this.messages.push(reply);
+        this.sending = true;
+        this.scrollToBottom();
+
+        const self = this;
+        fetch(commonURL + "/agent/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "authorization": getToken()
+          },
+          body: JSON.stringify({conversationId: this.conversationId, question: text})
+        }).then(response => {
+          // 这条走的是原生 fetch，不经过 axios 拦截器，401 得自己按统一的规矩处理
+          if (response.status === 401) {
+            throw {needLogin: true};
+          }
+          if (!response.ok) {
+            throw new Error("服务返回 " + response.status);
+          }
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let buffer = "";
+          const pump = () => reader.read().then(({value, done}) => {
+            if (done) {
+              self.finishStream(reply);
+              return;
+            }
+            buffer += decoder.decode(value, {stream: true});
+            let index;
+            while ((index = buffer.indexOf("\n\n")) >= 0) {
+              self.handleFrame(buffer.slice(0, index), reply);
+              buffer = buffer.slice(index + 2);
+            }
+            self.scrollToBottom();
+            return pump();
+          });
+          return pump();
+        }).catch(err => {
+          self.sending = false;
+          if (err && err.needLogin) {
+            // 令牌失效：清掉本地令牌，提示并去登录页，和其他地方统一。
+            // 然后把这两条气泡撤掉，别把「对话失败：服务返回 401」留在对话里，
+            // 用户输入的内容放回输入框，免得他重打。
+            clearLoginToken();
+            goLoginAfter("登录已过期，请重新登录");
+            self.messages.splice(self.messages.indexOf(reply), 1);
+            const last = self.messages[self.messages.length - 1];
+            if (last && last.role === "user" && last.content === text) {
+              self.messages.splice(self.messages.length - 1, 1);
+              self.question = text;
+            }
+            return;
+          }
+          reply.content = reply.content || ("对话失败：" + (err.message || err));
+          self.finishStream(reply);
+        });
+      },
+      handleFrame(frame, reply) {
+        let event = "message";
+        const dataLines = [];
+        frame.split("\n").forEach(line => {
+          if (line.indexOf("event:") === 0) {
+            event = line.substring(6).trim();
+          } else if (line.indexOf("data:") === 0) {
+            dataLines.push(line.substring(5).replace(/^ /, ""));
+          }
+        });
+        const data = dataLines.join("\n");
+        if (event === "token") {
+          reply.content += data;
+          // 开始输出正文就收起「正在检索…」状态
+          reply.toolStatus = null;
+        } else if (event === "tool") {
+          reply.toolStatus = data;
+        } else if (event === "citations") {
+          reply.citations = this.parseCitations(data);
+        } else if (event === "done") {
+          if (data) {
+            this.conversationId = parseInt(data, 10);
+          }
+        } else if (event === "error") {
+          reply.content = (reply.content ? reply.content + "\n" : "") + data;
+        }
+      },
+      finishStream(reply) {
+        reply.streaming = false;
+        this.sending = false;
+        this.scrollToBottom();
+        this.loadConversations();
+      }
+    }
+  })
+</script>
+</body>
+</html>

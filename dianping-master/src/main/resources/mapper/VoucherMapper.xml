@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hmdp.mapper.VoucherMapper">
+
+    <!-- 券只有一张表，库存和起止时间都在 tb_voucher 里，不需要再 JOIN -->
+    <select id="queryVoucherOfShop" resultType="com.hmdp.entity.Voucher" parameterType="java.lang.Long">
+        SELECT id, shop_id, title, sub_title, rules, pay_value,
+               actual_value, stock, begin_time, end_time
+        FROM tb_voucher
+        WHERE shop_id = #{shopId} AND status = 1
+    </select>
+</mapper>
